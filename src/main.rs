@@ -26,7 +26,7 @@ fn main() {
                 // Handle
                 // println!("DATA: {:?}", data_frame);
 
-                println!("[{:?}]: {:?) kW ({:?} kWh on meter)", data_frame.time(), data_frame.electricity_delivering(), data_frame.electricity_total_t1());
+                println!("[{:?}]: {:?} kW ({:?} kWh on meter)", data_frame.time(), data_frame.electricity_delivering(), data_frame.electricity_total_t1());
             },
 
             // Wait for more data
