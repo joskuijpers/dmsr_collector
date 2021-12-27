@@ -2,8 +2,8 @@ use chrono::{DateTime, Local, TimeZone};
 use crate::data_frame::{DataFrame, Object, RawFrame};
 use nom::{IResult, bytes::complete::{take_while_m_n, take_till}, character::complete::{char}, sequence::tuple, AsChar};
 use nom::bytes::complete::is_a;
-use nom::character::complete::crlf;
-use nom::combinator::{map_res, not, peek};
+use nom::character::complete::{alpha0, crlf, one_of};
+use nom::combinator::{map_res, not, peek, recognize};
 use nom::multi::many1;
 
 #[derive(Debug)]
@@ -53,6 +53,28 @@ fn header(input: &str) -> IResult<&str, (String, String)> {
 /// Parse a hex value
 fn from_hex(input: &str) -> Result<u16, std::num::ParseIntError> {
     u16::from_str_radix(input, 16)
+}
+
+fn decimal(input: &str) -> IResult<&str, i64> {
+    map_res(
+        recognize(
+            many1(
+                one_of("0123456789")
+            )
+        ),
+        |out: &str| i64::from_str_radix(out, 10)
+    )(input)
+}
+
+fn decimal_point(input: &str) -> IResult<&str, f64> {
+    map_res(
+        recognize(
+            many1(
+                one_of("0123456789.")
+            )
+        ),
+        |out: &str| out.parse::<f64>()
+    )(input)
 }
 
 fn crc_format(input: &str) -> IResult<&str, u16> {
@@ -107,19 +129,37 @@ fn object_tst(input: &str) -> IResult<&str, DateTime<Local>> {
     // TODO timezone. W = winter, S = summer
     // println!("TIMEZONE {:?}", timezone);
 
-    println!("{}", str);
     let time = Local.datetime_from_str(str, "%y%m%d%H%M%S")
-        .expect("Date time is not valid");
-    println!("{:?}", time);
+        .expect("Date time is not valid"); // TODO: handle error gracefully
 
     Ok((input, time))
 }
 
+fn object_version(input: &str) -> IResult<&str, u32> {
+    let (input, (_, version, _)) = tuple((
+        char('('),
+        decimal,
+        char(')'),
+        ))(input)?;
+
+    Ok((input, version as u32))
+}
+
+/// Parse an object that is (decimal*unit), where decimal can have a point.
+fn object_decimal_unit(input: &str) -> IResult<&str, f64> {
+    let (input, (_, value, _, _, _)) = tuple((
+        char('('),
+        decimal_point,
+        char('*'),
+        alpha0,
+        char(')'),
+    ))(input)?;
+
+    Ok((input, value))
+}
 
 /// Parse an object.
 fn to_object(input: (&str, &str)) -> Result<Object, ParseError> {
-    println!("PARSE KEY {:?} , VALUE: {:?}", input.0, input.1);
-
     fn unwrap_parser<T>(r: IResult<&str, T>) -> Result<T, ParseError> {
         match r {
             Err(_) => Err(ParseError::Invalid),
@@ -128,12 +168,29 @@ fn to_object(input: (&str, &str)) -> Result<Object, ParseError> {
     }
 
     let object = match input.0 {
-        "1-3:0.2.8.255" => {
-            Object::Version(0)
+        "1-3:0.2.8" => {
+            let version = unwrap_parser(object_version(input.1))?;
+            Object::Version(version)
         },
         "0-0:1.0.0" => {
             let time = unwrap_parser(object_tst(input.1))?;
             Object::Time(time)
+        },
+        "1-0:1.8.1" => {
+            let value = unwrap_parser(object_decimal_unit(input.1))?;
+            Object::ElectricityDeliveredT1(value)
+        },
+        "1-0:1.8.2" => {
+            let value = unwrap_parser(object_decimal_unit(input.1))?;
+            Object::ElectricityDeliveredT2(value)
+        },
+        "1-0:1.7.0" => {
+            let value = unwrap_parser(object_decimal_unit(input.1))?;
+            Object::ElectricityDelivered(value)
+        },
+        "1-0:2.7.0" => {
+            let value = unwrap_parser(object_decimal_unit(input.1))?;
+            Object::ElectricityReceived(value)
         },
         _ => Object::Unknown(input.0.to_string(), input.1.to_string()),
     };
@@ -187,5 +244,25 @@ mod tests {
 
         assert_eq!(res.1.len(), 1);
         assert_eq!(res.1.first().unwrap().clone(), Object::Time(date));
+    }
+
+    #[test]
+    fn delivered_total_t1_object() {
+        let input = "1-0:1.8.1(001382.570*kWh)\r\n";
+
+        let res = content(input).unwrap();
+
+        assert_eq!(res.1.len(), 1);
+        assert_eq!(res.1.first().unwrap().clone(), Object::ElectricityDeliveredT1(1382.570));
+    }
+
+    #[test]
+    fn delivered_object() {
+        let input = "1-0:1.7.0(00.200*kW)\r\n";
+
+        let res = content(input).unwrap();
+
+        assert_eq!(res.1.len(), 1);
+        assert_eq!(res.1.first().unwrap().clone(), Object::ElectricityDelivered(0.200));
     }
 }
