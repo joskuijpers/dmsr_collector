@@ -79,4 +79,17 @@ impl DataFrame {
             None
         }
     }
+
+    pub fn electricity_total_t1(&self) -> Option<f64> {
+        let item = self.objects.iter().find(|s| match s {
+            Object::ElectricityDeliveredT1(_) => true,
+            _ => false,
+        });
+
+        if let Some(Object::ElectricityDeliveredT1(v)) = item {
+            Some(*v)
+        } else {
+            None
+        }
+    }
 }

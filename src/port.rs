@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 use std::io::{BufReader, BufRead, Write, Read};
+use std::io::ErrorKind::TimedOut;
 use std::time::Duration;
 use nom::AsBytes;
 use ringbuf::{Consumer, Producer, RingBuffer};
@@ -69,15 +70,15 @@ impl USBPort {
         let size = match self.serialport.read(buffer.as_mut()) {
             Ok(size) => size,
             Err(e) => {
-                println!("ERROR: Failed to read from serial port {:?}", e);
+                // Timeing out is regular behavior
+                if e.kind() != TimedOut {
+                    println!("ERROR: Failed to read from serial port {:?}", e);
+                }
                 return
             },
         };
 
         self.producer.write_all(&buffer[..size]).unwrap();
-
-        println!("NEW BUFFER SIZE {:?}", self.consumer.len());
-
     }
 }
 
@@ -85,9 +86,6 @@ impl Iterator for USBPort {
     type Item = Result<RawFrame, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: buffer has to be a ring buffer..... or Vec and removing elements!
-        //  code below will not work
-
         // Try to read bytes
         self.try_read();
 
@@ -95,26 +93,21 @@ impl Iterator for USBPort {
             return Some(Err(Error::NoData));
         }
 
-        // Try to parse a frame. It might not succeed and more data is needed.
+        // Access the data without consuming as we might not consume everything
+        let mut buffer = Vec::with_capacity(self.consumer.len());
 
-        let mut buffer = [0; 1024];
+        // Copy data over. This is less than 1kb
         self.consumer.access(|old, new| {
-            println!("F {:?} S {:?}", old.len(), new.len());
+            buffer.write_all(old);
+            buffer.write_all(new);
         });
 
-        if let Err(e) = self.consumer.read(buffer.as_mut()) {
-            return Some(Err(Error::Io(e)));
-        }
-
+        // Then parse the frame and consume whatever we did use
         let (raw_frame, size) = match try_parse(buffer.as_bytes()) {
             Ok(result) => result,
             Err(e) => return Some(Err(e)),
         };
-
-        // Progress in buffer
         self.consumer.discard(size);
-
-        println!("SKIPPING {:?}", size);
 
         Some(Ok(raw_frame))
     }
