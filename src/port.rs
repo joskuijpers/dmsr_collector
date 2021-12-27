@@ -99,7 +99,7 @@ impl Iterator for USBPort {
 
         let mut buffer = [0; 1024];
         self.consumer.access(|old, new| {
-            println!("F {:?} S {:?}", a.len(), b.len());
+            println!("F {:?} S {:?}", old.len(), new.len());
         });
 
         if let Err(e) = self.consumer.read(buffer.as_mut()) {
