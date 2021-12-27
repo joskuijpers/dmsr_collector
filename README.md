@@ -1,4 +1,4 @@
-# dmsr_collector (wip)
+# dsmr_collector (wip)
 
 P1 DSMR data collector for Smart Electricity Meters in The Netherlands
 
