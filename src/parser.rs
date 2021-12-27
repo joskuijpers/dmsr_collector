@@ -55,10 +55,6 @@ fn from_hex(input: &str) -> Result<u16, std::num::ParseIntError> {
     u16::from_str_radix(input, 16)
 }
 
-fn from_dec2(input: &str) -> Result<u32, std::num::ParseIntError> {
-    u32::from_str_radix(input, 10)
-}
-
 fn crc_format(input: &str) -> IResult<&str, u16> {
     map_res(
         take_while_m_n(4, 4, |c: char| c.is_hex_digit()),
@@ -97,25 +93,13 @@ fn content(input: &str) -> IResult<&str, Vec<Object>> {
 
 //////// Objects
 
-fn double_dec(input: &str) -> IResult<&str, u32> {
-    map_res(
-        take_while_m_n(2, 2, |c: char| c.is_numeric()),
-        from_dec2
-    )(input)
-}
-
 // TST
 // YYMMDDhhmmssX
 // ASCII presentation of Time stamp with Year, Month, Day, Hour, Minute, Second, and an indication whether DST is active (X=S) or DST is not active (X=W).
 fn object_tst(input: &str) -> IResult<&str, DateTime<Local>> {
-    let (input, (_, y, m, d, h, min, s, _timezone, _)) = tuple((
+    let (input, (_, str, _timezone, _)) = tuple((
         char('('),
-        double_dec,
-        double_dec,
-        double_dec,
-        double_dec,
-        double_dec,
-        double_dec,
+        take_while_m_n(12, 12, |c: char| c.is_numeric()),
         is_a("SW"),
         char(')')
         ))(input)?;
@@ -123,12 +107,9 @@ fn object_tst(input: &str) -> IResult<&str, DateTime<Local>> {
     // TODO timezone. W = winter, S = summer
     // println!("TIMEZONE {:?}", timezone);
 
-    println!("{} {} {} {} {} {}", y, m, d, h, min, s);
-
-    let time = Local.ymd((y as i32) + 2000, m, d).and_hms(h, min, s);
-
-    // DateTime::parse_from_str()
-
+    println!("{}", str);
+    let time = Local.datetime_from_str(str, "%y%m%d%H%M%S")
+        .expect("Date time is not valid");
     println!("{:?}", time);
 
     Ok((input, time))
