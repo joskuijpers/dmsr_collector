@@ -49,6 +49,8 @@ impl DataFrame {
             objects,
             checksum,
         }
+
+        // IDEA: convert `objects` to regular values so getting is much easier...
     }
 
     pub fn time(&self) -> Option<DateTime<Local>> {
