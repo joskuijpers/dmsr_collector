@@ -12,13 +12,8 @@ pub enum ParseError {
 }
 
 pub struct Parser;
-
 impl Parser {
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn parse(&self, raw_frame: RawFrame) -> Result<DataFrame, ParseError> {
+    pub fn parse(raw_frame: RawFrame) -> Result<DataFrame, ParseError> {
         match parse_frame(raw_frame.get_data()) {
             Ok((_, data_frame)) => Ok(data_frame),
             Err(_) => Err(ParseError::Invalid),

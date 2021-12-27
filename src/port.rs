@@ -1,10 +1,10 @@
 use std::fmt::{Debug, Display, Formatter};
-use std::io::{BufReader, BufRead};
+use std::io::{BufReader, BufRead, Write, Read};
 use std::time::Duration;
+use nom::AsBytes;
+use ringbuf::{Consumer, Producer, RingBuffer};
 use serialport::{DataBits, Parity, SerialPort, StopBits};
 use crate::data_frame::RawFrame;
-// use std::time::Duration;
-// use serialport::{DataBits, Parity, SerialPort, StopBits};
 
 #[derive(Debug)]
 pub enum Error {
@@ -28,8 +28,8 @@ impl std::error::Error for Error {}
 
 pub struct USBPort {
     serialport: Box<dyn SerialPort>,
-    buffer: Vec<u8>,
-    buffer_pos: usize,
+    producer: Producer<u8>,
+    consumer: Consumer<u8>,
 }
 
 impl USBPort {
@@ -43,49 +43,82 @@ impl USBPort {
             .open()
             .expect("Port does not exist"); // TODO error forwarding
 
+        let ringbuffer = RingBuffer::new(4096);
+        let (producer, consumer) = ringbuffer.split();
+
         Self {
             serialport: port,
-            buffer: vec![0; 2048],
-            buffer_pos: 0,
+            producer,
+            consumer,
         }
     }
 
     // TODO: do something useful, like finding port
-    pub fn list() {
-        let ports = serialport::available_ports().expect("No ports found!");
-        for p in ports {
-            println!("{}", p.port_name);
-        }
+    // pub fn list() {
+    //     let ports = serialport::available_ports().expect("No ports found!");
+    //     for p in ports {
+    //         println!("{}", p.port_name);
+    //     }
+    // }
+
+    /// Try to read more bytes
+    pub fn try_read(&mut self) {
+        let mut buffer = [0; 1024];
+
+        // Read data and add to buffer
+        let size = match self.serialport.read(buffer.as_mut()) {
+            Ok(size) => size,
+            Err(e) => {
+                println!("ERROR: Failed to read from serial port {:?}", e);
+                return
+            },
+        };
+
+        self.producer.write_all(&buffer[..size]).unwrap();
+
+        println!("NEW BUFFER SIZE {:?}", self.consumer.len());
+
     }
 }
 
-// impl Iterator for USBPort {
-//     type Item = Result<RawFrame, Error>;
-//
-//     fn next(&mut self) -> Option<Self::Item> {
-//         // TODO: buffer has to be a ring buffer..... or Vec and removing elements!
-//         //  code below will not work
-//
-//         // Read data and add to buffer
-//         let size = match self.serialport.read(self.buffer.as_mut_slice()) {
-//             Ok(size) => size,
-//             Err(e) => return Some(Err(Error::Port(e))),
-//         };
-//
-//         self.buffer_pos += size;
-//
-//         // Try to parse a frame. It might not succeed and more data is needed.
-//         let result = match try_parse(self.buffer.as_bytes()) {
-//             Ok(result) => result,
-//             Err(e) => return Some(Err(e)),
-//         };
-//
-//         // Progress in buffer
-//         self.buffer_pos -= result.1;
-//
-//         Some(Ok(raw_frame))
-//     }
-// }
+impl Iterator for USBPort {
+    type Item = Result<RawFrame, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // TODO: buffer has to be a ring buffer..... or Vec and removing elements!
+        //  code below will not work
+
+        // Try to read bytes
+        self.try_read();
+
+        if self.consumer.is_empty() {
+            return Some(Err(Error::NoData));
+        }
+
+        // Try to parse a frame. It might not succeed and more data is needed.
+
+        let mut buffer = [0; 1024];
+        self.consumer.access(|old, new| {
+            println!("F {:?} S {:?}", a.len(), b.len());
+        });
+
+        if let Err(e) = self.consumer.read(buffer.as_mut()) {
+            return Some(Err(Error::Io(e)));
+        }
+
+        let (raw_frame, size) = match try_parse(buffer.as_bytes()) {
+            Ok(result) => result,
+            Err(e) => return Some(Err(e)),
+        };
+
+        // Progress in buffer
+        self.consumer.discard(size);
+
+        println!("SKIPPING {:?}", size);
+
+        Some(Ok(raw_frame))
+    }
+}
 
 /// Port using a file as input for testing.
 /// Will cut into 100 byte blocks to test continuous stream.
