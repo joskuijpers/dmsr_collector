@@ -20,13 +20,15 @@ fn main() {
         match line {
             // Handle some data
             Ok(raw_frame) => {
-                println!("RAW: {:?}", raw_frame);
+                // println!("RAW: {:?}", raw_frame);
 
                 // Parse
-                let data_frame = parser.parse(raw_frame);
+                let data_frame = parser.parse(raw_frame).unwrap();
 
                 // Handle
-                println!("DATA: {:?}", data_frame);
+                // println!("DATA: {:?}", data_frame);
+
+                println!("[{:?}]: {:?} kW", data_frame.time(), data_frame.electricity_delivering());
             },
 
             // Wait for more data

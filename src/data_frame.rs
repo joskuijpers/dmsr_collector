@@ -1,4 +1,4 @@
-use chrono::Local;
+use chrono::{DateTime, Local};
 
 #[derive(Debug)]
 pub struct RawFrame {
@@ -51,7 +51,30 @@ impl DataFrame {
         }
     }
 
-    pub fn is_valid(&self) -> bool {
-        true
+    pub fn time(&self) -> Option<DateTime<Local>> {
+        let item = self.objects.iter().find(|s| match s {
+            Object::Time(_) => true,
+            _ => false,
+        });
+
+        if let Some(Object::Time(t)) = item {
+            Some(*t)
+        } else {
+            None
+        }
+    }
+
+    /// Get the amount of electricity being delivered in kW.
+    pub fn electricity_delivering(&self) -> Option<f64> {
+        let item = self.objects.iter().find(|s| match s {
+            Object::ElectricityDelivered(_) => true,
+            _ => false,
+        });
+
+        if let Some(Object::ElectricityDelivered(v)) = item {
+            Some(*v)
+        } else {
+            None
+        }
     }
 }
