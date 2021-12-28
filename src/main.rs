@@ -1,41 +1,29 @@
 use std::time::Duration;
 use crate::parser::Parser;
-use crate::port::{FilePort, USBPort};
+use crate::port::PortBuilder;
+use crate::reader::FrameReader;
 
 mod port;
 mod parser;
 mod data_frame;
+mod reader;
 
 fn main() {
     // Open port
-    let port = USBPort::new("/dev/ttyUSB0");
+    // let port = PortBuilder::from_device("/dev/ttyUSB0");
 
     // Fake port
-    // let port = FilePort::new(include_str!("../../tests/testdata").as_bytes());
+    let port = PortBuilder::from_data(include_str!("../../tests/testdata").as_bytes());
+    let mut frame_reader = FrameReader::new(port);
 
-    // Keep reading data from the port
-    for line in port {
-        match line {
-            // Handle some data
-            Ok(raw_frame) => {
-                // println!("RAW: {:?}", raw_frame);
+    loop {
+        if let Some(raw_frame) = frame_reader.read_next_byte() {
+            let data_frame = Parser::parse(raw_frame).unwrap();
 
-                // Parse
-                let data_frame = Parser::parse(raw_frame).unwrap();
+            println!("[{:?}]: {:?} kW ({:?} kWh on meter)", data_frame.time(), data_frame.electricity_delivering(), data_frame.electricity_total_t1());
 
-                // Handle
-                // println!("DATA: {:?}", data_frame);
-
-                println!("[{:?}]: {:?} kW ({:?} kWh on meter)", data_frame.time(), data_frame.electricity_delivering(), data_frame.electricity_total_t1());
-            },
-
-            // Wait for more data
-            Err(port::Error::NoData) => {},
-
-            // An actual error.
-            Err(e) => println!("ERROR {:?}", e),
+            // DSMR only does frames every 1 second.
+            std::thread::sleep(Duration::from_millis(250));
         }
-
-        std::thread::sleep(Duration::from_millis(100));
     }
 }

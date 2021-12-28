@@ -53,6 +53,10 @@ impl DataFrame {
         // IDEA: convert `objects` to regular values so getting is much easier...
     }
 
+    pub fn is_valid(&self) -> bool {
+        true // no validation
+    }
+
     pub fn time(&self) -> Option<DateTime<Local>> {
         let item = self.objects.iter().find(|s| match s {
             Object::Time(_) => true,
