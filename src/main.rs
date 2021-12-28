@@ -20,7 +20,13 @@ fn main() {
         if let Some(raw_frame) = frame_reader.read_next_byte() {
             let data_frame = Parser::parse(raw_frame).unwrap();
 
-            println!("[{:?}]: {:?} kW ({:?} kWh on meter)", data_frame.time(), data_frame.electricity_delivering(), data_frame.electricity_total_t1());
+            println!("[{:?}]: {:?} kW ({:?} + {:?} kWh on meter), {:?} m3 gas on meter",
+                     data_frame.time,
+                     data_frame.data.electricity_delivering,
+                     data_frame.data.electricity_delivered_t1,
+                     data_frame.data.electricity_delivered_t2,
+                     data_frame.data.gas_delivered,
+            );
 
             // DSMR only does frames every 1 second.
             std::thread::sleep(Duration::from_millis(250));

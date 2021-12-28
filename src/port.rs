@@ -1,6 +1,5 @@
 use std::io::{BufReader, Write, Read};
 use std::io::ErrorKind::TimedOut;
-use std::time::Duration;
 use ringbuf::{Consumer, Producer, RingBuffer};
 use serialport::{DataBits, Parity, SerialPort, StopBits};
 

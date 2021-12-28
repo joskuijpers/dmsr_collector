@@ -2,7 +2,7 @@ use chrono::{DateTime, Local, TimeZone};
 use crate::data_frame::{DataFrame, Object, RawFrame};
 use nom::{IResult, bytes::complete::{take_while_m_n, take_till}, character::complete::{char}, sequence::tuple, AsChar};
 use nom::bytes::complete::is_a;
-use nom::character::complete::{alpha0, crlf, one_of};
+use nom::character::complete::{alphanumeric0, crlf, one_of};
 use nom::combinator::{map_res, not, peek, recognize};
 use nom::multi::many1;
 
@@ -146,11 +146,15 @@ fn object_decimal_unit(input: &str) -> IResult<&str, f64> {
         char('('),
         decimal_point,
         char('*'),
-        alpha0,
+        alphanumeric0,
         char(')'),
     ))(input)?;
 
     Ok((input, value))
+}
+
+fn object_gas(input: &str) -> IResult<&str, (DateTime<Local>, f64)> {
+    tuple((object_tst, object_decimal_unit))(input)
 }
 
 /// Parse an object.
@@ -181,11 +185,15 @@ fn to_object(input: (&str, &str)) -> Result<Object, ParseError> {
         },
         "1-0:1.7.0" => {
             let value = unwrap_parser(object_decimal_unit(input.1))?;
-            Object::ElectricityDelivered(value)
+            Object::ElectricityDelivering(value)
         },
         "1-0:2.7.0" => {
             let value = unwrap_parser(object_decimal_unit(input.1))?;
-            Object::ElectricityReceived(value)
+            Object::ElectricityReceiving(value)
+        },
+        "0-1:24.2.1" => {
+            let (time, value) = unwrap_parser(object_gas(input.1))?;
+            Object::GasDelivered(time, value)
         },
         _ => Object::Unknown(input.0.to_string(), input.1.to_string()),
     };
@@ -199,7 +207,7 @@ mod tests {
     use chrono::{Local, TimeZone};
     use crate::data_frame::{Object, RawFrame};
     use crate::Parser;
-    use crate::parser::{header, footer, content};
+    use crate::parser::{header, footer, content, object_gas};
 
     #[test]
     fn valid_header() {
@@ -258,5 +266,16 @@ mod tests {
 
         assert_eq!(res.1.len(), 1);
         assert_eq!(res.1.first().unwrap().clone(), Object::ElectricityDelivered(0.200));
+    }
+
+    #[test]
+    fn gas_value() {
+        let input = "(211227133003W)(00409.167*m3)";
+        let date = Local.ymd(2021, 12, 27).and_hms(13,30,03);
+
+        let res = object_gas(input).unwrap();
+
+        assert_eq!(res.1.0, date);
+        assert_eq!(res.1.1, 409.167);
     }
 }
