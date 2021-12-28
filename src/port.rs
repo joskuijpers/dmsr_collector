@@ -31,7 +31,6 @@ pub struct USBPort {
 impl USBPort {
     fn new(dev_str: &str) -> Self {
         let port = serialport::new(dev_str, 115_200)
-            .timeout(Duration::from_millis(10))
             .parity(Parity::None)
             .stop_bits(StopBits::One)
             .data_bits(DataBits::Eight)
@@ -74,7 +73,9 @@ impl Port for USBPort {
             },
         };
 
-        self.producer.write_all(&buffer[..size]).unwrap();
+        if size > 0 {
+            self.producer.write(&buffer[..size]).unwrap();
+        }
     }
 
     fn read(&mut self) -> Option<u8> {
