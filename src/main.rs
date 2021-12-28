@@ -10,10 +10,10 @@ mod reader;
 
 fn main() {
     // Open port
-    // let port = PortBuilder::from_device("/dev/ttyUSB0");
+    let port = PortBuilder::from_device("/dev/ttyUSB0");
 
     // Fake port
-    let port = PortBuilder::from_data(include_str!("../../tests/testdata").as_bytes());
+    // let port = PortBuilder::from_data(include_str!("../../tests/testdata").as_bytes());
     let mut frame_reader = FrameReader::new(port);
 
     loop {
