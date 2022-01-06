@@ -8,4 +8,10 @@ serialport = "4.0.1"
 nom = "7.1.0"
 chrono = "0.4.19"
 ringbuf = "0.2.6"
-postgres = { version = "0.19.2", features = ["with-chrono-0_4"] }
+postgres = { version = "0.19.2", features = ["with-chrono-0_4"], optional = true }
+clap = { version = "3.0.5", features = ["derive"] }
+
+[features]
+database = ["postgres"]
+
+default = ["database"]

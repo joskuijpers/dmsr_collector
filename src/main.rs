@@ -1,62 +1,96 @@
 use std::time::Duration;
-use postgres::{Client, NoTls};
-use postgres::types::ToSql;
-use crate::parser::Parser;
 use crate::port::PortBuilder;
 use crate::reader::FrameReader;
+use crate::data_frame::DataFrame;
+use crate::parser::FrameParser;
+use clap::Parser;
+
+use crate::backend::{Backend, DSMRAPI};
+#[cfg(feature = "database")]
+use crate::backend::Database;
 
 mod port;
 mod parser;
 mod data_frame;
 mod reader;
+mod backend;
+
+/// Simple program to greet a person
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+struct Args {
+    /// Path to the device or file for reading frames
+    #[clap(short, long)]
+    input: String,
+
+    /// Database URL to write to
+    #[cfg(feature = "database")]
+    #[clap(long)]
+    database: Option<String>,
+
+    /// URL of the API server
+    #[clap(long="api")]
+    api_url: Option<String>,
+
+    /// Authentication key for the API server
+    #[clap(long)]
+    api_key: Option<String>,
+
+    /// Verbose output
+    #[clap(short, long)]
+    verbose: bool,
+}
 
 fn main() {
-    // Open port
-    let port = PortBuilder::from_device("/dev/ttyUSB0");
+    let args: Args = Args::parse();
 
-    // Fake port
-    // let port = PortBuilder::from_data(include_str!("../../tests/testdata").as_bytes());
+    if args.api_url.is_some() && args.api_key.is_none() {
+        println!("Option 'api-key' is required when using the api.");
+        return;
+    }
+
+    let port = PortBuilder::from_path(&args.input);
     let mut frame_reader = FrameReader::new(port);
 
-    let mut client = Client::connect("host=localhost user=pi password=pi", NoTls).unwrap();
-    // let mut client = Client::connect("host=localhost user=postgres", NoTls).unwrap();
-
-    client.batch_execute("
-        CREATE TABLE IF NOT EXISTS dsmr_raw (
-            id                  SERIAL PRIMARY KEY,
-            time                TIMESTAMPTZ NOT NULL,
-            delivering          DOUBLE PRECISION NOT NULL,
-            delivered_t1        DOUBLE PRECISION NOT NULL,
-            delivered_t2        DOUBLE PRECISION NOT NULL,
-            gas_delivered       DOUBLE PRECISION NOT NULL
-        )
-    ").unwrap();
+    // let mut backend = Database::new("postgres://pi:pi@localhost".to_string());
+    let mut backend = make_backend(&args);
+    backend.init().unwrap();
 
     loop {
         if let Some(raw_frame) = frame_reader.read_next_byte() {
-            let data_frame = Parser::parse(raw_frame).unwrap();
+            let data_frame = FrameParser::parse(raw_frame).unwrap();
 
-            println!("[{:?}]: {:?} kW ({:?} + {:?} kWh on meter), {:?} m3 gas on meter",
-                     data_frame.time,
-                     data_frame.data.electricity_delivering,
-                     data_frame.data.electricity_delivered_t1,
-                     data_frame.data.electricity_delivered_t2,
-                     data_frame.data.gas_delivered,
-            );
+            if args.verbose {
+                println!("[{:?}]: {:?} kW ({:?} + {:?} kWh on meter), {:?} m3 gas on meter",
+                         data_frame.time,
+                         data_frame.data.electricity_delivering,
+                         data_frame.data.electricity_delivered_t1,
+                         data_frame.data.electricity_delivered_t2,
+                         data_frame.data.gas_delivered,
+                );
+            }
 
-            client.execute(
-                "INSERT INTO dsmr_raw (time, delivering, delivered_t1, delivered_t2, gas_delivered) VALUES ($1, $2, $3, $4, $5)",
-                &[
-                    &data_frame.time,
-                    &data_frame.data.electricity_delivering,
-                    &data_frame.data.electricity_delivered_t1,
-                    &data_frame.data.electricity_delivered_t2,
-                    &data_frame.data.gas_delivered
-                ],
-            ).unwrap();
+            backend.send(&data_frame).unwrap();
 
             // DSMR only does frames every 1 second.
             std::thread::sleep(Duration::from_millis(250));
         }
     }
+}
+
+fn make_backend(args: &Args) -> Box<dyn Backend> {
+    #[cfg(feature = "database")]
+    {
+        if let Some(db_url) = &args.database {
+            return Box::new(Database::new(db_url.as_str()));
+        }
+    }
+
+    if let Some(api_url) = &args.api_url {
+        if let Some(api_key) = &args.api_key {
+            return Box::new(DSMRAPI::new(api_url.as_str(), api_key.as_str()));
+        }
+    }
+
+    panic!("Either 'api' or 'database' is required'");
 }

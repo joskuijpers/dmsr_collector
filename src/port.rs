@@ -1,3 +1,4 @@
+use std::fs::File;
 use std::io::{BufReader, Write, Read};
 use std::io::ErrorKind::TimedOut;
 use std::path::{Path, PathBuf};
@@ -7,20 +8,20 @@ use serialport::{DataBits, Parity, SerialPort, StopBits};
 
 pub struct PortBuilder;
 impl PortBuilder {
-    // pub fn from_path<P: AsRef<Path>>(path: P) -> Box<dyn Port> {
-    //     let x = path.as_ref();
-    //
-    //     if let Some(device) = PortBuilder::get_serial_devices()
-    //         .iter()
-    //         .find(|p| *p == &x) {
-    //         Self::from_device(device.to_str().unwrap())
-    //     } else {
-    //         Self::from_data(path)
-    //     }
-    // }
+    pub fn from_path<P: AsRef<Path>>(path: P) -> Box<dyn Port> {
+        let x = path.as_ref();
 
-    pub fn from_data(data: &'static [u8]) -> Box<dyn Port> {
-        Box::new(FilePort::new(data))
+        if let Some(device) = PortBuilder::get_serial_devices()
+            .iter()
+            .find(|p| *p == &x) {
+            Self::from_device(device.to_str().unwrap())
+        } else {
+            Self::from_file(path)
+        }
+    }
+
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Box<dyn Port> {
+        Box::new(FilePort::new(path).unwrap())
     }
 
     pub fn from_device<P: AsRef<Path>>(path: P) -> Box<dyn Port> {
@@ -109,16 +110,17 @@ impl Port for USBPort {
 
 /// Port with a byte array as input. Useful for testing without actual serial port.
 pub struct FilePort {
-    reader: BufReader<&'static [u8]>,
+    reader: BufReader<File>,
 }
 
 impl FilePort {
-    fn new(data: &'static [u8]) -> Self {
-        let reader = BufReader::new(data);
+    fn new<P: AsRef<Path>>(path: P) -> Result<Self, std::io::Error> {
+        let file = File::open(path)?;
+        let mut reader = BufReader::new(file);
 
-        Self {
+        Ok(Self {
             reader,
-        }
+        })
     }
 }
 
