@@ -1,11 +1,13 @@
 use std::fmt::Error;
 use crate::DataFrame;
 
+#[cfg(feature = "api")]
 mod api;
 
 #[cfg(feature = "database")]
 mod database;
 
+#[cfg(feature = "api")]
 pub use api::*;
 
 #[cfg(feature = "database")]

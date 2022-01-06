@@ -34,8 +34,6 @@ impl Backend for Database {
     }
 
     fn send(&mut self, data_frame: &DataFrame) -> Result<(), Error> {
-        println!("WRITE TO DB");
-
         self.client.execute(
             "INSERT INTO dsmr_raw (time, delivering, delivered_t1, delivered_t2, gas_delivered) VALUES ($1, $2, $3, $4, $5)",
             &[

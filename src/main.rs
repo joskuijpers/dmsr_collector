@@ -5,9 +5,11 @@ use crate::data_frame::DataFrame;
 use crate::parser::FrameParser;
 use clap::Parser;
 
-use crate::backend::{Backend, DSMRAPI};
+use crate::backend::Backend;
 #[cfg(feature = "database")]
 use crate::backend::Database;
+#[cfg(feature = "api")]
+use crate::backend::DSMRAPI;
 
 mod port;
 mod parser;
@@ -29,10 +31,12 @@ struct Args {
     database: Option<String>,
 
     /// URL of the API server
+    #[cfg(feature = "api")]
     #[clap(long="api")]
     api_url: Option<String>,
 
     /// Authentication key for the API server
+    #[cfg(feature = "api")]
     #[clap(long)]
     api_key: Option<String>,
 
@@ -80,12 +84,11 @@ fn main() {
 
 fn make_backend(args: &Args) -> Box<dyn Backend> {
     #[cfg(feature = "database")]
-    {
-        if let Some(db_url) = &args.database {
-            return Box::new(Database::new(db_url.as_str()));
-        }
+    if let Some(db_url) = &args.database {
+        return Box::new(Database::new(db_url.as_str()));
     }
 
+    #[cfg(feature = "api")]
     if let Some(api_url) = &args.api_url {
         if let Some(api_key) = &args.api_key {
             return Box::new(DSMRAPI::new(api_url.as_str(), api_key.as_str()));

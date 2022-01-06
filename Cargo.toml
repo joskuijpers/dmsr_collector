@@ -10,8 +10,11 @@ chrono = "0.4.19"
 ringbuf = "0.2.6"
 postgres = { version = "0.19.2", features = ["with-chrono-0_4"], optional = true }
 clap = { version = "3.0.5", features = ["derive"] }
+serde = { version = "1.0.133", optional = true, features = ["derive"] }
+reqwest = { version = "0.11.8", optional = true, features = ["blocking", "json"] }
 
 [features]
 database = ["postgres"]
+api = ["serde", "reqwest"]
 
-default = ["database"]
+default = ["database", "api"]

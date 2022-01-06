@@ -35,7 +35,7 @@ pub enum Object {
     Unknown(String, String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataFrame {
     prefix: String,
     identifier: String,
@@ -46,7 +46,7 @@ pub struct DataFrame {
     pub data: DataFrameData,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct DataFrameData {
     pub electricity_delivered_t1: f64,
     pub electricity_delivered_t2: f64,
